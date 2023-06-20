@@ -21,15 +21,14 @@ namespace Ultimo.Controllers
 
         private bool ChecarSenha(Cartao newCartao)
         {
-            var tudoJunto = "" + (newCartao.DataNasc.Value.Year.ToString().Substring(2)) + "" +
+            var tudoJunto = "" + (newCartao.DataNasc.Value.Day) + "" +
                 (newCartao.DataNasc.Value.Month.ToString().Length == 1 ? ("0" + newCartao.DataNasc.Value.Month) : (newCartao.DataNasc.Value.Month))
-                + "" + (newCartao.DataNasc.Value.Day);
+                + "" + (newCartao.DataNasc.Value.Year.ToString().Substring(2));
 
             var idade = DateTime.Today.Year - newCartao.DataNasc.Value.Year;
             var senha = newCartao.Senha.ToString();
-            var senhaConfirm = newCartao.SenhaConfirm.ToString();
 
-            if (idade >= 18 && senha.Length == 6 && senha != tudoJunto && int.TryParse(senha, out int n) && senha.Distinct().Count() == 6)
+            if (idade >= 18 && senha.Length == 6 && senha != tudoJunto && int.TryParse(senha, out int n) && senha.Distinct().Count() == 6 && newCartao.Senha == newCartao.SenhaConfirm)
             {
                 bool sequencia = false;
                 for (int i = 0; i < senha.Length - 1; i++)
@@ -69,7 +68,7 @@ namespace Ultimo.Controllers
             string aviso = null;
 
             if(DateTime.Today.Year - newCartao.DataNasc.Value.Year < 18)
-                return BadRequest("É obrigatório ter 18 ou mais de idade para solicitar um cartão.");
+                return BadRequest("É obrigatório ter 18 ou mais de idade para solicitar um cartão.\n");
 
             if (newCartao.Bandeira != "Mastercard" && newCartao.Bandeira != "Visa")
                 aviso += "É necessário que a Bandeira seja 'Mastercard' ou 'Visa'.\n";
@@ -79,7 +78,7 @@ namespace Ultimo.Controllers
 
             if (newCartao.Tipo != "PLATINUM" && newCartao.Tipo != "GOLD" && newCartao.Tipo != "BLACK" && newCartao.Tipo != "DIAMOND")
             {
-                aviso += "É necessário que o Tipo seja 'PLATINUM', 'GOLD', 'BLACK' ou 'DIAMOND'.";
+                aviso += "É necessário que o Tipo seja 'PLATINUM', 'GOLD', 'BLACK' ou 'DIAMOND'.\n";
             }
             else
             {
@@ -102,7 +101,7 @@ namespace Ultimo.Controllers
 
             if (!senha_ok)
             {
-                aviso += "É necessário que a senha tenha 6 dígitos que não correspondam à data de nascimento, sem números repetidos ou sequenciais.";
+                aviso += "É necessário que a senha tenha 6 dígitos que não correspondam à data de nascimento, sem números repetidos ou sequenciais.\nConfirme se o campo de senha e confirmação de senha são iguais.\n";
                 return BadRequest(aviso); 
             }
             else
@@ -110,12 +109,16 @@ namespace Ultimo.Controllers
                 newCartao.Status = "SOLICITADO";
                 newCartao.Cvv = r.Next(100, 1000).ToString();
                 newCartao.Numero = r.Next(1000, 9999).ToString() + " " + r.Next(1000, 9999).ToString() + " " + r.Next(1000, 9999).ToString() + " " + r.Next(1000, 9999).ToString();
-
+                //newCartao.DataVenc = (DateTime.Today.Year + int.Parse(newCartao.DataVenc)).ToString() + "/" + DateTime.Today.Month;
+                newCartao.DataVenc = (DateTime.Today.Day) +"/"+(DateTime.Today.Month.ToString().Length == 1 ? ("0" + DateTime.Today.Month) : (DateTime.Today.Month))
+                + "/" + (DateTime.Today.Year + int.Parse(newCartao.DataVenc));
                 await _cartoesService.CreateAsync(newCartao);
                 if (!string.IsNullOrEmpty(aviso))
                     return BadRequest(aviso);
 
-                return Ok("ID do Cartão: " + newCartao.Id + "\n" + "Número do Cartão: " + newCartao.Numero + "\n" + "Nome a ser impresso: " + newCartao.NomeCartao + "\n" + "Data de Vencimento: " + newCartao.DataVenc + "\n" + "\n\nINSTRUÇÕES PARA ATIVAÇÃO\nUtilizar o serviço 'AtivarCartão' e inserir os seguintes dados: número do cartão, agência, conta e senha (" + newCartao.Senha + ")");
+                return Ok("ID do Cartão: " + newCartao.Id + "\n" + "Número do Cartão: " + newCartao.Numero + "\n" + "Nome a ser impresso: " + newCartao.NomeCartao + "\n" + "Data de Vencimento: " + newCartao.DataVenc + "\n" 
+                    + "\n\nINSTRUÇÕES PARA ATIVAÇÃO\nUtilizar o serviço 'EntregarCartão' para mudar o status de 'SOLICITADO' para 'ENTREGUE'.\nUtilizar o serviço 'AtivarCartão' e inserir os seguintes dados: número do cartão, agência, conta e senha (" + newCartao.Senha 
+                    + ")\nConsulte suas informações no serviço de 'ConsultarCartão' ou 'ConsultarCartão_Full'.");
                 //return CreatedAtAction(nameof(Get), new {id = newCartao.Id}, newCartao);
             }
 
@@ -151,7 +154,7 @@ namespace Ultimo.Controllers
             {
                 cartao.Status = "ENTREGUE";
                 await _cartoesService.UpdateAsync(id, cartao);
-                return Ok("Cartão Entregue!");
+                return Ok("Cartão Entregue!\nConsulte suas informações no serviço de 'ConsultarCartão' ou 'ConsultarCartão_Full'.");
             }
             else
             {
@@ -163,7 +166,7 @@ namespace Ultimo.Controllers
         [HttpPut("AtivarCartao")]
         public async Task<IActionResult> AtivarCartao(string id, string numero, string agencia, string conta, string senha)
         {
-            var cartao = await _cartoesService.GetAsync(id);
+            var cartao = await _cartoesService.GetAsyncNumero(numero);
 
             cartao.Id = cartao.Id;
 
@@ -176,7 +179,7 @@ namespace Ultimo.Controllers
 
                     await _cartoesService.UpdateAsync(id, cartao);
 
-                    return Ok("Cartão Ativo!");
+                    return Ok("Cartão Ativo!\nConsulte suas informações no serviço de 'ConsultarCartão' ou 'ConsultarCartão_Full'.");
                     //return CreatedAtAction(nameof(Get), new { id = cartao.Id }, cartao);
                 }
                 else
@@ -195,7 +198,7 @@ namespace Ultimo.Controllers
         [HttpPut("BloquearCartao")]
         public async Task<IActionResult> BloquearCartao(string id, string numero,string agencia, string conta, string senha, string motivo)
         {
-            var cartao = await _cartoesService.GetAsync(id);
+            var cartao = await _cartoesService.GetAsyncNumero(numero);
 
             cartao.Id = cartao.Id;
 
@@ -208,7 +211,8 @@ namespace Ultimo.Controllers
                     {
                         cartao.Status = motivo;
                         await _cartoesService.UpdateAsync(id, cartao);
-                        return CreatedAtAction(nameof(Get), new { id = cartao.Id }, cartao);
+                        return Ok("Cartão Bloqueado!\nConsulte suas informações no serviço de 'ConsultarCartão' ou 'ConsultarCartão_Full'.");
+                        //return CreatedAtAction(nameof(Get), new { id = cartao.Id }, cartao);
                     }
                     else
                     {
@@ -231,7 +235,7 @@ namespace Ultimo.Controllers
         [HttpPut("CancelarCartao")]
         public async Task<IActionResult> CancelarCartao(string id, string numero, string agencia, string conta, string senha, string textoOpcional)
         {
-            var cartao = await _cartoesService.GetAsync(id);
+            var cartao = await _cartoesService.GetAsyncNumero(numero);
 
             cartao.Id = cartao.Id;
 
@@ -239,7 +243,7 @@ namespace Ultimo.Controllers
             {
                 cartao.Status = "CANCELADO";
                 await _cartoesService.UpdateAsync(id, cartao);
-                return Ok("Cartão Cancelado!");
+                return Ok("Cartão Cancelado!\nConsulte suas informações no serviço de 'ConsultarCartão' ou 'ConsultarCartão_Full'.");
             }
             else
             {
@@ -263,10 +267,23 @@ namespace Ultimo.Controllers
             }
         }
 
-        [HttpDelete("{id:length(24)}")]
-        public async Task<IActionResult> Delete(string id)
+        [HttpGet("ConsultarCartão_Full")]
+        public async Task<ActionResult<Cartao>> ConsultarCartao_Full(string numero)
         {
-            var cartao = await _cartoesService.GetAsync(id);
+            var cartao = await _cartoesService.GetAsyncNumero(numero);
+
+            if (cartao is null)
+            {
+                return BadRequest("Cartão não encontrado. Cheque se as informações estão corretas.");
+            }
+
+            return cartao;
+        }
+
+        [HttpDelete("{id:length(24)}")]
+        public async Task<IActionResult> Delete(string numero)
+        {
+            var cartao = await _cartoesService.GetAsyncNumero(numero);
 
             if (cartao is null)
             {
